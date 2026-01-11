@@ -427,12 +427,9 @@ export default function ExperimentPlatform() {
     document.body.appendChild(script);
 
     const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
-        await signInAnonymously(auth);
-      }
-    };
+  await signInAnonymously(auth);
+};
+
     initAuth();
     const unsubAuth = onAuthStateChanged(auth, (user) => setAuthUser(user));
     return () => {
