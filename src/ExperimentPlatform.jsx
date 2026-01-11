@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Activity, Settings, Play, Pause, Lock, User, Trophy, Briefcase,
   Layout, Globe, Smartphone, Tv, Youtube, Download, Trash2,
@@ -16,18 +16,13 @@ import {
   getFirestore,
   doc,
   setDoc,
-  onSnapshot,
-  collection,
-  addDoc,
-  getDocs,
-  writeBatch
+  onSnapshot
 } from "firebase/firestore";
 
 /* ================= FIREBASE CONFIG ================= */
 
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyDQzza05lJO_5xR_a2dPKofIJ6Do7cXY6w",
+  apiKey: "AIzaSyDQzza05lJ0_5xR_a2dPKofIJ6Do7cXY6w", // ✅ FIXED (ZERO, NOT O)
   authDomain: "tradinglab-6b948.firebaseapp.com",
   projectId: "tradinglab-6b948",
   storageBucket: "tradinglab-6b948.firebasestorage.app",
@@ -36,7 +31,11 @@ const firebaseConfig = {
   measurementId: "G-8WH9VNWJN6"
 };
 
+/* ================= APP CONSTANTS ================= */
+
 const APP_ID = "trading-lab-prod";
+
+/* ================= FIREBASE INIT ================= */
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -59,19 +58,16 @@ const MODEL = {
   mu: 0.00002,
   sigma: 0.0005,
   noise: 0.0003,
-  decay: 0.15,
-  max: 0.015,
-  loss: 1.25,
-  gain: 0.85
+  max: 0.015
 };
 
 const INITIAL_CASH = 1_000_000;
 
 const STOCKS = [
-  { symbol: "TCS", name: "TCS", price: 3421 },
-  { symbol: "INFY", name: "Infosys", price: 1450 },
-  { symbol: "HDFCBANK", name: "HDFC Bank", price: 1530 },
-  { symbol: "ICICIBANK", name: "ICICI Bank", price: 960 }
+  { symbol: "TCS", price: 3421 },
+  { symbol: "INFY", price: 1450 },
+  { symbol: "HDFCBANK", price: 1530 },
+  { symbol: "ICICIBANK", price: 960 }
 ];
 
 const initStocks = () =>
@@ -88,38 +84,31 @@ export default function ExperimentPlatform() {
   const [authUser, setAuthUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [stocks, setStocks] = useState(initStocks());
-  const [cash, setCash] = useState(INITIAL_CASH);
-  const [portfolio, setPortfolio] = useState({});
-  const [news, setNews] = useState([]);
   const [time, setTime] = useState(0);
   const [sessionStatus, setSessionStatus] = useState("WAITING");
-  const engine = useRef({ stocks: initStocks(), news: [], time: 0 });
+  const engine = useRef({ stocks: initStocks(), time: 0 });
 
   /* ===== AUTH ===== */
 
   useEffect(() => {
-  const runAuth = async () => {
-    try {
-      console.log("Attempting anonymous auth...");
-      await signInAnonymously(auth);
-      console.log("Anonymous auth request sent");
-    } catch (e) {
-      console.error("Anonymous auth failed:", e);
-    }
-  };
+    const runAuth = async () => {
+      try {
+        console.log("Attempting anonymous auth...");
+        await signInAnonymously(auth);
+      } catch (e) {
+        console.error("Anonymous auth failed:", e);
+      }
+    };
 
-  runAuth();
+    runAuth();
 
-  const unsub = onAuthStateChanged(auth, user => {
-    console.log("Auth state changed:", user);
-    if (user) {
-      setAuthUser(user);
-    }
-  });
+    const unsub = onAuthStateChanged(auth, user => {
+      console.log("Auth state:", user);
+      if (user) setAuthUser(user);
+    });
 
-  return () => unsub();
-}, []);
-
+    return () => unsub();
+  }, []);
 
   /* ===== MARKET SYNC ===== */
 
@@ -131,18 +120,13 @@ export default function ExperimentPlatform() {
       if (!snap.exists()) return;
       const d = snap.data();
       setStocks(d.stocks || initStocks());
-      setNews(d.newsList || []);
       setTime(d.time || 0);
       setSessionStatus(d.sessionStatus || "WAITING");
-      engine.current = {
-        stocks: d.stocks || initStocks(),
-        news: d.newsList || [],
-        time: d.time || 0
-      };
+      engine.current = { stocks: d.stocks || initStocks(), time: d.time || 0 };
     });
   }, [authUser]);
 
-  /* ===== ENGINE LOOP (ADMIN OR SINGLE HOST) ===== */
+  /* ===== ENGINE LOOP ===== */
 
   useEffect(() => {
     if (sessionStatus !== "LIVE") return;
@@ -175,7 +159,7 @@ export default function ExperimentPlatform() {
     setUserData({ name, regNo });
     await setDoc(
       doc(db, "artifacts", APP_ID, "public", "data", "users", authUser.uid),
-      { uid: authUser.uid, name, regNo, cash: INITIAL_CASH, portfolio: {} },
+      { uid: authUser.uid, name, regNo, cash: INITIAL_CASH },
       { merge: true }
     );
   };
@@ -212,7 +196,6 @@ export default function ExperimentPlatform() {
       <h1 className="text-2xl font-bold flex items-center gap-2">
         Trading Lab <CheckCircle className="text-green-500" />
       </h1>
-      <p className="text-sm text-gray-500">User: {userData.name}</p>
 
       <div className="mt-6 grid grid-cols-2 gap-4">
         {Object.values(stocks).map(s => (
