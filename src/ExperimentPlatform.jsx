@@ -42,7 +42,7 @@ const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
 
 // --- CONFIGURATION ---
 // FIX: Use system __app_id to satisfy security rules
-const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'behavioral-lab-session';
+const APP_ID = "behavioral-lab-session";
 
 const MODEL_CONFIG = {
   mu: 0.00002,          
