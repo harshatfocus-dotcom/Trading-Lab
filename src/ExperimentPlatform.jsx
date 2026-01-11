@@ -22,7 +22,7 @@ import {
 /* ================= FIREBASE CONFIG ================= */
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDQzza05lJ0_5xR_a2dPKofIJ6Do7cXY6w", // ✅ FIXED (ZERO, NOT O)
+  apiKey: "AIzaSyDQzza05lJO_5xR_a2dPKofIJ6Do7cXY6w", // ✅ FIXED (ZERO, NOT O)
   authDomain: "tradinglab-6b948.firebaseapp.com",
   projectId: "tradinglab-6b948",
   storageBucket: "tradinglab-6b948.firebasestorage.app",
