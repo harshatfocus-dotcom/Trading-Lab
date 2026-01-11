@@ -1,119 +1,176 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Trading Lab</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8" />
+<title>Trading Lab</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
+<!-- Tailwind -->
+<script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Firebase (COMPAT for browser simplicity) -->
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<!-- Firebase (browser-safe compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+<style>
+  body { background:#f8fafc; }
+</style>
 </head>
 
-<body class="bg-slate-100 text-slate-900">
+<body class="text-slate-900">
 
-<!-- LOGIN SCREEN -->
-<div id="loginScreen" class="min-h-screen flex items-center justify-center">
-  <div class="bg-white w-80 p-6 rounded-lg shadow">
-    <h1 class="text-xl font-bold text-center mb-4">Trading Lab</h1>
-    <input id="name" placeholder="Name" class="w-full border p-2 rounded mb-2">
-    <input id="reg" placeholder="Reg No" class="w-full border p-2 rounded mb-4">
-    <button onclick="login()" class="w-full bg-black text-white py-2 rounded">
-      Enter
+<!-- LOGIN -->
+<div id="login" class="min-h-screen flex items-center justify-center">
+  <div class="bg-white p-8 rounded-xl shadow-xl w-96">
+    <h1 class="text-2xl font-bold text-center mb-6">Trading Lab</h1>
+    <input id="name" class="w-full border p-3 rounded mb-3" placeholder="Name">
+    <input id="reg" class="w-full border p-3 rounded mb-4" placeholder="Reg No">
+    <button onclick="enterLab()" class="w-full bg-black text-white py-3 rounded-lg font-semibold">
+      Enter Simulation
     </button>
   </div>
 </div>
 
-<!-- MAIN APP -->
+<!-- APP -->
 <div id="app" class="hidden min-h-screen flex flex-col">
-  <header class="bg-white border-b p-4 flex justify-between">
-    <span class="font-bold">TRADING LAB</span>
-    <span id="userInfo" class="text-sm text-gray-500"></span>
-  </header>
 
-  <main class="p-6 grid grid-cols-3 gap-4">
-    <!-- Market -->
-    <div class="col-span-2 bg-white p-4 rounded shadow">
-      <h2 class="font-semibold mb-2">Market Watch</h2>
-      <table class="w-full text-sm">
-        <tbody id="marketTable"></tbody>
-      </table>
+<!-- TOP BAR -->
+<header class="bg-white border-b px-6 py-3 flex justify-between items-center">
+  <div class="flex items-center gap-3">
+    <div class="w-9 h-9 bg-black text-white rounded flex items-center justify-center font-bold">TL</div>
+    <div>
+      <div class="font-bold leading-tight">TRADING<span class="text-gray-400">LAB</span></div>
+      <div id="userTag" class="text-xs text-gray-400"></div>
     </div>
+  </div>
 
-    <!-- Admin -->
-    <div class="bg-white p-4 rounded shadow">
-      <h2 class="font-semibold mb-3">Admin Panel</h2>
-      <button onclick="moveMarket()" class="w-full bg-blue-600 text-white py-2 rounded">
-        Simulate Market Move
-      </button>
-    </div>
-  </main>
+  <div class="flex items-center gap-4">
+    <span id="sessionStatus" class="px-3 py-1 rounded text-xs bg-gray-200">MARKET CLOSED</span>
+    <button onclick="toggleAdmin()" class="text-sm text-gray-500 hover:text-black">⚙ Admin</button>
+  </div>
+</header>
+
+<!-- ADMIN PANEL -->
+<div id="adminPanel" class="hidden bg-slate-900 text-slate-200 p-6">
+  <div class="flex justify-between mb-4">
+    <div class="uppercase text-xs tracking-widest text-slate-400">Master Control</div>
+    <button onclick="toggleAdmin()">Close</button>
+  </div>
+
+  <div class="grid grid-cols-3 gap-4">
+    <button onclick="startMarket()" class="bg-green-600 py-2 rounded">▶ Start</button>
+    <button onclick="stopMarket()" class="bg-yellow-600 py-2 rounded">⏸ Pause</button>
+    <button onclick="resetMarket()" class="bg-red-600 py-2 rounded">⟲ Reset</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="flex flex-1 overflow-hidden">
+
+<!-- NEWS -->
+<div class="w-1/3 bg-white border-r p-4 overflow-y-auto">
+  <h2 class="font-semibold mb-3">Market Intelligence</h2>
+  <div id="newsFeed" class="space-y-3 text-sm text-gray-600 italic">
+    Waiting for market signals…
+  </div>
+</div>
+
+<!-- MARKET -->
+<div class="w-2/3 p-6 overflow-y-auto">
+  <div class="bg-white rounded-xl shadow p-4">
+    <h2 class="font-semibold mb-4">Market Watch</h2>
+
+    <table class="w-full text-sm">
+      <thead class="text-gray-500 border-b">
+        <tr>
+          <th class="text-left py-2">Symbol</th>
+          <th class="text-right py-2">Price</th>
+          <th class="text-right py-2">Change</th>
+        </tr>
+      </thead>
+      <tbody id="market"></tbody>
+    </table>
+  </div>
+</div>
+
+</div>
 </div>
 
 <script>
-  // 🔥 FIREBASE CONFIG (YOUR PROJECT)
-  const firebaseConfig = {
-    apiKey: "AIzaSyDQzza05lJO_5xR_a2dPKofIJ6Do7cXY6w",
-    authDomain: "tradinglab-6b948.firebaseapp.com",
-    projectId: "tradinglab-6b948",
-    storageBucket: "tradinglab-6b948.firebasestorage.app",
-    messagingSenderId: "769994506304",
-    appId: "1:769994506304:web:121a856d62dd98a1c65fa5",
-    measurementId: "G-8WH9VNWJN6"
-  };
+/* ---------------- FIREBASE ---------------- */
+firebase.initializeApp({
+  apiKey: "AIzaSyDQzza05lJO_5xR_a2dPKofIJ6Do7cXY6w",
+  authDomain: "tradinglab-6b948.firebaseapp.com",
+  projectId: "tradinglab-6b948"
+});
+const db = firebase.firestore();
 
-  firebase.initializeApp(firebaseConfig);
-  const auth = firebase.auth();
-  const db = firebase.firestore();
+/* ---------------- STATE ---------------- */
+let user = null;
+let marketLive = false;
+let prices = {
+  TCS: 3420,
+  INFY: 1450,
+  ICICIBANK: 960,
+  HDFCBANK: 1530
+};
+let lastPrices = {...prices};
 
-  auth.signInAnonymously();
+/* ---------------- LOGIN ---------------- */
+function enterLab() {
+  const n = name.value, r = reg.value;
+  if (!n || !r) return alert("Fill details");
+  user = {n,r};
+  login.classList.add("hidden");
+  app.classList.remove("hidden");
+  userTag.innerText = n + " • " + r;
+  renderMarket();
+}
 
-  let user = null;
+/* ---------------- MARKET ---------------- */
+function renderMarket() {
+  market.innerHTML = "";
+  Object.keys(prices).forEach(s => {
+    const diff = prices[s] - lastPrices[s];
+    const pct = ((diff/lastPrices[s])*100).toFixed(2);
+    market.innerHTML += `
+      <tr class="border-b">
+        <td class="py-2 font-medium">${s}</td>
+        <td class="py-2 text-right font-mono">₹${prices[s].toFixed(2)}</td>
+        <td class="py-2 text-right font-mono ${diff>=0?'text-green-600':'text-red-600'}">
+          ${diff>=0?'+':''}${pct}%
+        </td>
+      </tr>`;
+  });
+}
 
-  const stocks = {
-    TCS: 3420,
-    INFY: 1450,
-    ICICIBANK: 960,
-    HDFCBANK: 1530
-  };
+/* ---------------- ENGINE ---------------- */
+setInterval(()=>{
+  if(!marketLive) return;
+  lastPrices = {...prices};
+  Object.keys(prices).forEach(s=>{
+    prices[s] *= 1 + (Math.random()-0.5)/30;
+  });
+  renderMarket();
+},1000);
 
-  function login() {
-    const name = document.getElementById("name").value;
-    const reg = document.getElementById("reg").value;
-    if (!name || !reg) return alert("Fill both fields");
-
-    user = { name, reg };
-
-    document.getElementById("loginScreen").classList.add("hidden");
-    document.getElementById("app").classList.remove("hidden");
-    document.getElementById("userInfo").innerText = name + " (" + reg + ")";
-
-    renderMarket();
-  }
-
-  function renderMarket() {
-    const table = document.getElementById("marketTable");
-    table.innerHTML = "";
-    Object.keys(stocks).forEach(sym => {
-      table.innerHTML += `
-        <tr class="border-b">
-          <td class="py-2">${sym}</td>
-          <td class="py-2 text-right">₹${stocks[sym].toFixed(2)}</td>
-        </tr>
-      `;
-    });
-  }
-
-  function moveMarket() {
-    Object.keys(stocks).forEach(sym => {
-      stocks[sym] *= 1 + (Math.random() - 0.5) / 40;
-    });
-    renderMarket();
-  }
+/* ---------------- ADMIN ---------------- */
+function toggleAdmin(){ adminPanel.classList.toggle("hidden"); }
+function startMarket(){
+  marketLive=true;
+  sessionStatus.innerText="MARKET LIVE";
+  sessionStatus.className="px-3 py-1 rounded text-xs bg-green-200 text-green-800";
+}
+function stopMarket(){
+  marketLive=false;
+  sessionStatus.innerText="PAUSED";
+  sessionStatus.className="px-3 py-1 rounded text-xs bg-yellow-200 text-yellow-800";
+}
+function resetMarket(){
+  prices={TCS:3420,INFY:1450,ICICIBANK:960,HDFCBANK:1530};
+  lastPrices={...prices};
+  renderMarket();
+}
 </script>
 
 </body>
