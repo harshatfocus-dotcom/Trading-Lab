@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Activity, Settings, Play, Pause, Lock, User, Trophy, Briefcase,
-  Layout, Globe, Smartphone, Tv, Youtube, Download, Trash2,
-  LogOut, History, CheckCircle, AlertCircle, MessageCircle,
-  Share2, ThumbsUp, StopCircle, WifiOff, X
+  Play, Pause, RotateCcw, Download, ShieldCheck
 } from "lucide-react";
 
 import { initializeApp } from "firebase/app";
@@ -16,43 +13,33 @@ import {
   getFirestore,
   doc,
   setDoc,
-  onSnapshot
+  getDoc,
+  onSnapshot,
+  collection,
+  getDocs,
+  writeBatch,
+  serverTimestamp
 } from "firebase/firestore";
 
-/* ================= FIREBASE CONFIG ================= */
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+/* ================= FIREBASE ================= */
+
 const firebaseConfig = {
   apiKey: "AIzaSyDQzza05lJO_5xR_a2dPKofIJ6Do7cXY6w",
   authDomain: "tradinglab-6b948.firebaseapp.com",
   projectId: "tradinglab-6b948",
   storageBucket: "tradinglab-6b948.firebasestorage.app",
   messagingSenderId: "769994506304",
-  appId: "1:769994506304:web:121a856d62dd98a1c65fa5",
-  measurementId: "G-8WH9VNWJN6"
+  appId: "1:769994506304:web:121a856d62dd98a1c65fa5"
 };
 
-/* ================= APP CONSTANTS ================= */
-
 const APP_ID = "trading-lab-prod";
-
-/* ================= FIREBASE INIT ================= */
+const MAX_USERS = 50;
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-/* ================= UTILITIES ================= */
-
-const generateGaussian = (mean, std) => {
-  let u = 0, v = 0;
-  while (u === 0) u = Math.random();
-  while (v === 0) v = Math.random();
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v) * std + mean;
-};
-
-const clamp = (n, min, max) => Math.min(Math.max(n, min), max);
-
-/* ================= MARKET CONFIG ================= */
+/* ================= MARKET ================= */
 
 const MODEL = {
   mu: 0.00002,
@@ -60,8 +47,6 @@ const MODEL = {
   noise: 0.0003,
   max: 0.015
 };
-
-const INITIAL_CASH = 1_000_000;
 
 const STOCKS = [
   { symbol: "TCS", price: 3421 },
@@ -74,145 +59,186 @@ const initStocks = () =>
   Object.fromEntries(
     STOCKS.map(s => [
       s.symbol,
-      { ...s, currentPrice: s.price, history: [{ price: s.price }] }
+      { ...s, currentPrice: s.price, history: [{ t: 0, p: s.price }] }
     ])
   );
+
+const gaussian = (m, s) =>
+  Math.sqrt(-2 * Math.log(Math.random())) *
+  Math.cos(2 * Math.PI * Math.random()) * s + m;
 
 /* ================= COMPONENT ================= */
 
 export default function ExperimentPlatform() {
   const [authUser, setAuthUser] = useState(null);
   const [userData, setUserData] = useState(null);
-  const [stocks, setStocks] = useState(initStocks());
+  const [market, setMarket] = useState(initStocks());
   const [time, setTime] = useState(0);
-  const [sessionStatus, setSessionStatus] = useState("WAITING");
-  const engine = useRef({ stocks: initStocks(), time: 0 });
+  const [status, setStatus] = useState("WAITING");
+  const [replayT, setReplayT] = useState(null);
+  const engine = useRef(null);
+
+  const marketRef = doc(db, "artifacts", APP_ID, "public", "market", "main");
+  const usersRef = collection(db, "artifacts", APP_ID, "public", "users");
 
   /* ===== AUTH ===== */
 
   useEffect(() => {
-    const runAuth = async () => {
-      try {
-        console.log("Attempting anonymous auth...");
-        await signInAnonymously(auth);
-      } catch (e) {
-        console.error("Anonymous auth failed:", e);
-      }
-    };
-
-    runAuth();
-
-    const unsub = onAuthStateChanged(auth, user => {
-      console.log("Auth state:", user);
-      if (user) setAuthUser(user);
-    });
-
-    return () => unsub();
+    signInAnonymously(auth);
+    return onAuthStateChanged(auth, u => u && setAuthUser(u));
   }, []);
 
-  /* ===== MARKET SYNC ===== */
+  /* ===== USER LIMIT ===== */
 
   useEffect(() => {
     if (!authUser) return;
 
-    const ref = doc(db, "artifacts", APP_ID, "public", "data", "market_state", "main");
-    return onSnapshot(ref, snap => {
-      if (!snap.exists()) return;
-      const d = snap.data();
-      setStocks(d.stocks || initStocks());
-      setTime(d.time || 0);
-      setSessionStatus(d.sessionStatus || "WAITING");
-      engine.current = { stocks: d.stocks || initStocks(), time: d.time || 0 };
-    });
+    (async () => {
+      const snap = await getDocs(usersRef);
+      if (snap.size >= MAX_USERS) {
+        alert("Session full (50 users max)");
+        return;
+      }
+    })();
   }, [authUser]);
 
-  /* ===== ENGINE LOOP ===== */
+  /* ===== MARKET SYNC ===== */
 
   useEffect(() => {
-    if (sessionStatus !== "LIVE") return;
+    return onSnapshot(marketRef, snap => {
+      if (!snap.exists()) return;
+      const d = snap.data();
+      setMarket(d.stocks);
+      setTime(d.time);
+      setStatus(d.status);
+    });
+  }, []);
 
-    const id = setInterval(() => {
-      const T = engine.current.time + 1;
-      const next = { ...engine.current.stocks };
+  /* ===== ENGINE ===== */
 
+  useEffect(() => {
+    if (status !== "LIVE") return;
+
+    engine.current = setInterval(async () => {
+      const next = { ...market };
       Object.values(next).forEach(s => {
-        const r =
-          generateGaussian(MODEL.mu, MODEL.sigma) +
-          generateGaussian(0, MODEL.noise);
-        s.currentPrice *= 1 + clamp(r, -MODEL.max, MODEL.max);
-        s.history = [...s.history.slice(-60), { price: s.currentPrice }];
+        const r = gaussian(MODEL.mu, MODEL.sigma) + gaussian(0, MODEL.noise);
+        s.currentPrice *= 1 + Math.max(Math.min(r, MODEL.max), -MODEL.max);
+        s.history.push({ t: time + 1, p: s.currentPrice });
       });
 
-      setDoc(
-        doc(db, "artifacts", APP_ID, "public", "data", "market_state", "main"),
-        { stocks: next, time: T, sessionStatus: "LIVE" },
-        { merge: true }
-      );
+      await setDoc(marketRef, {
+        stocks: next,
+        time: time + 1,
+        status: "LIVE",
+        updated: serverTimestamp()
+      });
     }, 1000);
 
-    return () => clearInterval(id);
-  }, [sessionStatus]);
+    return () => clearInterval(engine.current);
+  }, [status, market, time]);
 
   /* ===== LOGIN ===== */
 
-  const login = async ({ name, regNo }) => {
-    setUserData({ name, regNo });
-    await setDoc(
-      doc(db, "artifacts", APP_ID, "public", "data", "users", authUser.uid),
-      { uid: authUser.uid, name, regNo, cash: INITIAL_CASH },
-      { merge: true }
+  const login = async e => {
+    e.preventDefault();
+    const name = e.target.name.value;
+    const reg = e.target.reg.value;
+
+    await setDoc(doc(usersRef, authUser.uid), {
+      uid: authUser.uid,
+      name,
+      reg,
+      joined: serverTimestamp()
+    });
+
+    setUserData({ name });
+  };
+
+  /* ===== ADMIN ===== */
+
+  const start = () => setDoc(marketRef, { status: "LIVE" }, { merge: true });
+  const pause = () => setDoc(marketRef, { status: "PAUSED" }, { merge: true });
+
+  const reset = async () => {
+    if (!window.confirm("RESET ENTIRE SESSION?")) return;
+    const batch = writeBatch(db);
+
+    const users = await getDocs(usersRef);
+    users.forEach(d => batch.delete(d.ref));
+
+    batch.set(marketRef, {
+      stocks: initStocks(),
+      time: 0,
+      status: "WAITING"
+    });
+
+    await batch.commit();
+    window.location.reload();
+  };
+
+  /* ===== EXPORT ===== */
+
+  const exportCSV = () => {
+    let rows = ["time,symbol,price"];
+    Object.values(market).forEach(s =>
+      s.history.forEach(h =>
+        rows.push(`${h.t},${s.symbol},${h.p.toFixed(2)}`)
+      )
     );
+    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "market.csv";
+    a.click();
   };
 
   /* ===== UI ===== */
 
-  if (!authUser) {
-    return <div className="p-10 text-lg">Connecting to Trading Lab…</div>;
-  }
+  if (!authUser) return <div className="p-10">Connecting…</div>;
 
-  if (!userData) {
+  if (!userData)
     return (
-      <div className="h-screen flex items-center justify-center">
-        <form
-          onSubmit={e => {
-            e.preventDefault();
-            login({
-              name: e.target.name.value,
-              regNo: e.target.reg.value
-            });
-          }}
-          className="bg-white p-6 shadow rounded"
-        >
-          <input name="name" placeholder="Name" required className="border p-2 mb-2 w-full" />
-          <input name="reg" placeholder="Reg No" required className="border p-2 mb-2 w-full" />
-          <button className="bg-black text-white w-full p-2">Enter</button>
-        </form>
-      </div>
+      <form onSubmit={login} className="p-10">
+        <input name="name" placeholder="Name" required />
+        <input name="reg" placeholder="Reg No" required />
+        <button>Enter</button>
+      </form>
     );
-  }
+
+  const viewT = replayT ?? time;
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold flex items-center gap-2">
-        Trading Lab <CheckCircle className="text-green-500" />
+    <div className="p-6 space-y-4">
+      <h1 className="text-xl flex items-center gap-2">
+        Trading Lab <ShieldCheck className="text-green-500" />
       </h1>
 
-      <div className="mt-6 grid grid-cols-2 gap-4">
-        {Object.values(stocks).map(s => (
-          <div key={s.symbol} className="border p-4 rounded">
-            <h3 className="font-bold">{s.symbol}</h3>
-            <p>₹{s.currentPrice.toFixed(2)}</p>
-          </div>
-        ))}
+      <div className="flex gap-2">
+        <button onClick={start}><Play /></button>
+        <button onClick={pause}><Pause /></button>
+        <button onClick={reset}><RotateCcw /></button>
+        <button onClick={exportCSV}><Download /></button>
       </div>
 
-      <div className="mt-6">
-        <button
-          onClick={() => setSessionStatus("LIVE")}
-          className="bg-green-600 text-white px-4 py-2 rounded"
-        >
-          Start Market
-        </button>
+      <input
+        type="range"
+        min="0"
+        max={time}
+        value={viewT}
+        onChange={e => setReplayT(+e.target.value)}
+      />
+
+      <div className="grid grid-cols-2 gap-4">
+        {Object.values(market).map(s => {
+          const h = s.history.find(x => x.t === viewT) || s.history.at(-1);
+          return (
+            <div key={s.symbol} className="border p-3">
+              <b>{s.symbol}</b>
+              <div>₹{h.p.toFixed(2)}</div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
