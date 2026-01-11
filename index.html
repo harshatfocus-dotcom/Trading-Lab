@@ -1,12 +1,120 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Trading Lab</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <title>Trading Lab</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Firebase (COMPAT for browser simplicity) -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+</head>
+
+<body class="bg-slate-100 text-slate-900">
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" class="min-h-screen flex items-center justify-center">
+  <div class="bg-white w-80 p-6 rounded-lg shadow">
+    <h1 class="text-xl font-bold text-center mb-4">Trading Lab</h1>
+    <input id="name" placeholder="Name" class="w-full border p-2 rounded mb-2">
+    <input id="reg" placeholder="Reg No" class="w-full border p-2 rounded mb-4">
+    <button onclick="login()" class="w-full bg-black text-white py-2 rounded">
+      Enter
+    </button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app" class="hidden min-h-screen flex flex-col">
+  <header class="bg-white border-b p-4 flex justify-between">
+    <span class="font-bold">TRADING LAB</span>
+    <span id="userInfo" class="text-sm text-gray-500"></span>
+  </header>
+
+  <main class="p-6 grid grid-cols-3 gap-4">
+    <!-- Market -->
+    <div class="col-span-2 bg-white p-4 rounded shadow">
+      <h2 class="font-semibold mb-2">Market Watch</h2>
+      <table class="w-full text-sm">
+        <tbody id="marketTable"></tbody>
+      </table>
+    </div>
+
+    <!-- Admin -->
+    <div class="bg-white p-4 rounded shadow">
+      <h2 class="font-semibold mb-3">Admin Panel</h2>
+      <button onclick="moveMarket()" class="w-full bg-blue-600 text-white py-2 rounded">
+        Simulate Market Move
+      </button>
+    </div>
+  </main>
+</div>
+
+<script>
+  // 🔥 FIREBASE CONFIG (YOUR PROJECT)
+  const firebaseConfig = {
+    apiKey: "AIzaSyDQzza05lJO_5xR_a2dPKofIJ6Do7cXY6w",
+    authDomain: "tradinglab-6b948.firebaseapp.com",
+    projectId: "tradinglab-6b948",
+    storageBucket: "tradinglab-6b948.firebasestorage.app",
+    messagingSenderId: "769994506304",
+    appId: "1:769994506304:web:121a856d62dd98a1c65fa5",
+    measurementId: "G-8WH9VNWJN6"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  auth.signInAnonymously();
+
+  let user = null;
+
+  const stocks = {
+    TCS: 3420,
+    INFY: 1450,
+    ICICIBANK: 960,
+    HDFCBANK: 1530
+  };
+
+  function login() {
+    const name = document.getElementById("name").value;
+    const reg = document.getElementById("reg").value;
+    if (!name || !reg) return alert("Fill both fields");
+
+    user = { name, reg };
+
+    document.getElementById("loginScreen").classList.add("hidden");
+    document.getElementById("app").classList.remove("hidden");
+    document.getElementById("userInfo").innerText = name + " (" + reg + ")";
+
+    renderMarket();
+  }
+
+  function renderMarket() {
+    const table = document.getElementById("marketTable");
+    table.innerHTML = "";
+    Object.keys(stocks).forEach(sym => {
+      table.innerHTML += `
+        <tr class="border-b">
+          <td class="py-2">${sym}</td>
+          <td class="py-2 text-right">₹${stocks[sym].toFixed(2)}</td>
+        </tr>
+      `;
+    });
+  }
+
+  function moveMarket() {
+    Object.keys(stocks).forEach(sym => {
+      stocks[sym] *= 1 + (Math.random() - 0.5) / 40;
+    });
+    renderMarket();
+  }
+</script>
+
+</body>
 </html>
