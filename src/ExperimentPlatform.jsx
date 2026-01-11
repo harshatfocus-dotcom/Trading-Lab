@@ -108,7 +108,15 @@ const getInitialStockState = () => {
 };
 
 // --- FIREBASE INIT ---
-const firebaseConfig = JSON.parse(__firebase_config);
+const firebaseConfig = {
+  apiKey: "AIzaSyDQzza05lJO_5xR_a2dPKofIJ6Do7cXY6w",
+  authDomain: "tradinglab-6b948.firebaseapp.com",
+  projectId: "tradinglab-6b948",
+  storageBucket: "tradinglab-6b948.firebasestorage.app",
+  messagingSenderId: "769994506304",
+  appId: "1:769994506304:web:121a856d62dd98a1c65fa5",
+  measurementId: "G-8WH9VNWJN6"
+};
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
