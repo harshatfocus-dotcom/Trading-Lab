@@ -98,12 +98,28 @@ export default function ExperimentPlatform() {
   /* ===== AUTH ===== */
 
   useEffect(() => {
-    signInAnonymously(auth).catch(console.error);
-    const unsub = onAuthStateChanged(auth, user => {
-      if (user) setAuthUser(user);
-    });
-    return () => unsub();
-  }, []);
+  const runAuth = async () => {
+    try {
+      console.log("Attempting anonymous auth...");
+      await signInAnonymously(auth);
+      console.log("Anonymous auth request sent");
+    } catch (e) {
+      console.error("Anonymous auth failed:", e);
+    }
+  };
+
+  runAuth();
+
+  const unsub = onAuthStateChanged(auth, user => {
+    console.log("Auth state changed:", user);
+    if (user) {
+      setAuthUser(user);
+    }
+  });
+
+  return () => unsub();
+}, []);
+
 
   /* ===== MARKET SYNC ===== */
 
