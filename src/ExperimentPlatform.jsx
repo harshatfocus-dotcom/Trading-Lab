@@ -36,7 +36,7 @@ const firebaseConfig = {
   measurementId: "G-8WH9VNWJN6"
 };
 
-const APP_ID = "behavioral-lab-session";
+const APP_ID = "trading-lab-prod";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
