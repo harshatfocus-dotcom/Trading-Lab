@@ -13,7 +13,6 @@ import {
   getFirestore,
   doc,
   setDoc,
-  getDoc,
   onSnapshot,
   collection,
   getDocs,
@@ -41,12 +40,7 @@ const db = getFirestore(app);
 
 /* ================= MARKET ================= */
 
-const MODEL = {
-  mu: 0.00002,
-  sigma: 0.0005,
-  noise: 0.0003,
-  max: 0.015
-};
+const MODEL = { mu: 0.00002, sigma: 0.0005, noise: 0.0003, max: 0.015 };
 
 const STOCKS = [
   { symbol: "TCS", price: 3421 },
@@ -87,20 +81,6 @@ export default function ExperimentPlatform() {
     signInAnonymously(auth);
     return onAuthStateChanged(auth, u => u && setAuthUser(u));
   }, []);
-
-  /* ===== USER LIMIT ===== */
-
-  useEffect(() => {
-    if (!authUser) return;
-
-    (async () => {
-      const snap = await getDocs(usersRef);
-      if (snap.size >= MAX_USERS) {
-        alert("Session full (50 users max)");
-        return;
-      }
-    })();
-  }, [authUser]);
 
   /* ===== MARKET SYNC ===== */
 
@@ -161,30 +141,19 @@ export default function ExperimentPlatform() {
   const pause = () => setDoc(marketRef, { status: "PAUSED" }, { merge: true });
 
   const reset = async () => {
-    if (!window.confirm("RESET ENTIRE SESSION?")) return;
+    if (!window.confirm("Reset entire session?")) return;
     const batch = writeBatch(db);
-
     const users = await getDocs(usersRef);
     users.forEach(d => batch.delete(d.ref));
-
-    batch.set(marketRef, {
-      stocks: initStocks(),
-      time: 0,
-      status: "WAITING"
-    });
-
+    batch.set(marketRef, { stocks: initStocks(), time: 0, status: "WAITING" });
     await batch.commit();
     window.location.reload();
   };
 
-  /* ===== EXPORT ===== */
-
   const exportCSV = () => {
     let rows = ["time,symbol,price"];
     Object.values(market).forEach(s =>
-      s.history.forEach(h =>
-        rows.push(`${h.t},${s.symbol},${h.p.toFixed(2)}`)
-      )
+      s.history.forEach(h => rows.push(`${h.t},${s.symbol},${h.p.toFixed(2)}`))
     );
     const blob = new Blob([rows.join("\n")], { type: "text/csv" });
     const a = document.createElement("a");
@@ -195,47 +164,61 @@ export default function ExperimentPlatform() {
 
   /* ===== UI ===== */
 
-  if (!authUser) return <div className="p-10">Connecting…</div>;
+  if (!authUser)
+    return <div className="h-screen bg-black text-white flex items-center justify-center">Connecting…</div>;
 
   if (!userData)
     return (
-      <form onSubmit={login} className="p-10">
-        <input name="name" placeholder="Name" required />
-        <input name="reg" placeholder="Reg No" required />
-        <button>Enter</button>
-      </form>
+      <div className="h-screen bg-black flex items-center justify-center">
+        <form onSubmit={login} className="bg-zinc-900 p-6 rounded-xl space-y-3 w-72">
+          <h2 className="text-white font-bold text-lg">Enter Trading Lab</h2>
+          <input name="name" placeholder="Name" required className="w-full p-2 rounded bg-zinc-800 text-white" />
+          <input name="reg" placeholder="Reg No" required className="w-full p-2 rounded bg-zinc-800 text-white" />
+          <button className="w-full bg-green-600 hover:bg-green-500 p-2 rounded text-white">
+            Enter
+          </button>
+        </form>
+      </div>
     );
 
   const viewT = replayT ?? time;
 
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-xl flex items-center gap-2">
-        Trading Lab <ShieldCheck className="text-green-500" />
-      </h1>
+    <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black text-white p-6">
+      <header className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          Trading Lab <ShieldCheck className="text-green-500" />
+        </h1>
+        <div className="flex gap-2">
+          <button onClick={start} className="bg-green-600 px-3 py-2 rounded"><Play /></button>
+          <button onClick={pause} className="bg-yellow-600 px-3 py-2 rounded"><Pause /></button>
+          <button onClick={reset} className="bg-red-600 px-3 py-2 rounded"><RotateCcw /></button>
+          <button onClick={exportCSV} className="bg-zinc-700 px-3 py-2 rounded"><Download /></button>
+        </div>
+      </header>
 
-      <div className="flex gap-2">
-        <button onClick={start}><Play /></button>
-        <button onClick={pause}><Pause /></button>
-        <button onClick={reset}><RotateCcw /></button>
-        <button onClick={exportCSV}><Download /></button>
+      <div className="mb-6">
+        <input
+          type="range"
+          min="0"
+          max={time}
+          value={viewT}
+          onChange={e => setReplayT(+e.target.value)}
+          className="w-full accent-green-500"
+        />
+        <div className="text-sm text-zinc-400 mt-1">Replay time: {viewT}</div>
       </div>
 
-      <input
-        type="range"
-        min="0"
-        max={time}
-        value={viewT}
-        onChange={e => setReplayT(+e.target.value)}
-      />
-
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {Object.values(market).map(s => {
           const h = s.history.find(x => x.t === viewT) || s.history.at(-1);
           return (
-            <div key={s.symbol} className="border p-3">
-              <b>{s.symbol}</b>
-              <div>₹{h.p.toFixed(2)}</div>
+            <div
+              key={s.symbol}
+              className="bg-zinc-900 rounded-xl p-4 shadow-lg hover:shadow-green-500/20 transition"
+            >
+              <div className="text-zinc-400 text-sm">{s.symbol}</div>
+              <div className="text-2xl font-bold mt-1">₹{h.p.toFixed(2)}</div>
             </div>
           );
         })}
